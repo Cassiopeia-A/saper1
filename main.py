@@ -3,11 +3,13 @@ import random
 
 import sys
 import os
+import time
 
 
 FPS = 30
 WIDTH, HEIGHT = 1600, 900
 clock = pygame.time.Clock()
+th, te = 0.0, 0.0
 
 
 def load_image(name, colorkey=None):
@@ -97,8 +99,6 @@ def level_pick():
 def load_map(size, m):
     cell_size = min((HEIGHT - 200) / size[0], (WIDTH - 200) / size[0])
 
-    #  screen = pygame.display.set_mode((size[1] * cell_size + 200, size[0] * cell_size + 200))
-
     fon = pygame.transform.scale(load_image('fon_game.jpg'), (WIDTH, HEIGHT))
     screen.blit(fon, (0, 0))
 
@@ -106,7 +106,12 @@ def load_map(size, m):
         for b in range(size[1]):
             screen.blit(pygame.transform.scale(cells['cell'], (cell_size, cell_size)),
                         (100 + b * cell_size, 100 + a * cell_size))
-    #  return screen
+
+    pygame.draw.rect(screen, 'black', ((4 * WIDTH / 5) - 200, (HEIGHT / 2) - 100, 250, 300))
+    screen.blit(pygame.font.Font(None, 100).render(str(mines), 1, 'white'), (4 * WIDTH / 5 - 130, HEIGHT / 2 - 50))
+    screen.blit(pygame.font.Font(None, 100).render(str(0.0), 1, 'white'),
+                (4 * WIDTH / 5 - 130, HEIGHT / 2 + 50))
+
     return cell_size
 
 
@@ -150,9 +155,12 @@ def change_cell(x, y):
             n = number_sosed(bombs, o[0], o[1])
             screen.blit(pygame.transform.scale(cells[n], (cell_size, cell_size)),
                         (o[0] * cell_size + 100, o[1] * cell_size + 100))
+            check.append(o)
 
 
 def generate(size, m, mx, my, cell_size):
+    global th
+    th = time.time()
     bombs = []
     for row in range(size[0]):
         lst = []
@@ -169,6 +177,7 @@ def generate(size, m, mx, my, cell_size):
             bx = random.randint(0, size[1] - 1)
             by = random.randint(0, size[0] - 1)
         bombs[by][bx] = 'b'
+
     return bombs
 
 
@@ -189,37 +198,32 @@ def number_sosed(bombs, x, y):
 
 
 def gameover():
-    global index
+    global boom, index, th, te, play
     index = -1
+    te = time.time()
 
     for r in range(map_size[0]):
         for c in range(map_size[1]):
             change_cell(c, r)
-
-    timer = pygame.USEREVENT + 1
-    pygame.time.set_timer(timer, 3000, False)
-
-    t = True
-    while t:
-        for ev1 in pygame.event.get():
-            if ev1.type == timer:
-                t = False
-        pygame.display.flip()
-
-    fon = pygame.transform.scale(load_image('gameover.jpg'), (WIDTH, HEIGHT))
-    screen.blit(fon, (0, 0))
 
     restart = True
     while restart:
         for ev2 in pygame.event.get():
             if ev2.type == pygame.MOUSEBUTTONDOWN:
                 restart = False
+        screen.blit(pygame.font.Font(None, 100).render(str(round(te - th, 1)), 1, 'white'),
+                    (4 * WIDTH / 5 - 130, HEIGHT / 2 + 50))
         pygame.display.flip()
 
-    fon = pygame.transform.scale(load_image('fon_game.jpg'), (WIDTH, HEIGHT))
-    screen.blit(fon, (0, 0))
-
     cell_size = load_map(map_size, mines)
+
+    flags.clear()
+    check.clear()
+    bombs.clear()
+    boom = difficulty[level][2]
+    th = 0.0
+    te = 0.0
+    play = False
 
     return cell_size
 
@@ -227,18 +231,18 @@ def gameover():
 def flag(x, y, boom):
     if (x, y) not in check:
         if (x, y) not in flags:
-            flags.append((x, y))
-            boom -= 1
-            screen.blit(pygame.transform.scale(cells['flag'], (cell_size, cell_size)),
-                        (x * cell_size + 100, y * cell_size + 100))
+            if boom > 0:
+                flags.append((x, y))
+                boom -= 1
+                screen.blit(pygame.transform.scale(cells['flag'], (cell_size, cell_size)),
+                            (x * cell_size + 100, y * cell_size + 100))
         else:
             flags.remove((x, y))
             boom += 1
             screen.blit(pygame.transform.scale(cells['cell'], (cell_size, cell_size)),
                         (x * cell_size + 100, y * cell_size + 100))
-        print(boom)
-        pygame.draw.rect(screen, 'black', ((4 * WIDTH / 5) - 150, (HEIGHT / 2) - 100, 300, 200))
-        screen.blit(pygame.font.Font(None, 100).render(str(boom), 1, 'white'), (4 * WIDTH / 5 - 25, HEIGHT / 2 - 25))
+        pygame.draw.rect(screen, 'black', ((4 * WIDTH / 5) - 200, (HEIGHT / 2) - 100, 250, 300))
+        screen.blit(pygame.font.Font(None, 100).render(str(boom), 1, 'white'), (4 * WIDTH / 5 - 130, HEIGHT / 2 - 50))
         pygame.display.flip()
 
     return boom
@@ -252,10 +256,11 @@ if __name__ == '__main__':
     level = level_pick()
     map_size = (difficulty[level][0], difficulty[level][1])
     mines = difficulty[level][2]
+    boom = mines
     cell_size = load_map(map_size, mines)
     index = 0
+    play = False
 
-    boom = mines
     flags = []
     check = []
     bombs = []
@@ -270,6 +275,7 @@ if __name__ == '__main__':
                 if 100 <= mx <= map_size[1] * cell_size + 100 and 100 <= my <= map_size[0] * cell_size + 100:
                     if index == 0:
                         bombs = generate(map_size, mines, mx, my, cell_size)
+                        play = True
                     x, y = cell_number(mx, my, cell_size)
                     if event.button == 1:
                         change_cell(x, y)
@@ -279,5 +285,13 @@ if __name__ == '__main__':
                     else:
                         boom = flag(x, y, boom)
                 index += 1
+        pygame.draw.rect(screen, 'black', ((4 * WIDTH / 5) - 200, (HEIGHT / 2) - 100, 250, 300))
+        if play:
+            screen.blit(pygame.font.Font(None, 100).render(str(round(time.time() - th, 1)), 1, 'white'),
+                        (4 * WIDTH / 5 - 130, HEIGHT / 2 + 50))
+        else:
+            screen.blit(pygame.font.Font(None, 100).render(str(0.0), 1, 'white'),
+                        (4 * WIDTH / 5 - 130, HEIGHT / 2 + 50))
+        screen.blit(pygame.font.Font(None, 100).render(str(boom), 1, 'white'), (4 * WIDTH / 5 - 130, HEIGHT / 2 - 50))
         pygame.display.flip()
     pygame.quit()
